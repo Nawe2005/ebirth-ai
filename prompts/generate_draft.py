@@ -29,6 +29,7 @@ import datetime
 import requests
 import feedparser
 from google import genai
+from google.genai import types
 
 # ----------------------------------------------------------------------------
 # CONFIG — tweak freely
@@ -126,6 +127,7 @@ def make_image(image_prompt: str):
         resp = client.models.generate_content(
             model=GEMINI_IMAGE_MODEL,
             contents=f"Generate an illustration: {image_prompt}",
+            config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
         )
         for part in resp.candidates[0].content.parts:
             inline = getattr(part, "inline_data", None)
