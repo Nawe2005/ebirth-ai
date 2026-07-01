@@ -18,10 +18,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install -r requirements.txt
+      - run: pip install -r prompts/requirements.txt
 
       - name: Publish to #ai-updates
-        run: python publish.py
+        run: python prompts/publish.py
         env:
           DISCORD_PUBLIC_WEBHOOK: ${{ secrets.DISCORD_PUBLIC_WEBHOOK }}
           DRAFT_DATE: ${{ github.event.inputs.date }}
