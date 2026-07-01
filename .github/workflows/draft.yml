@@ -4,10 +4,10 @@ on:
   schedule:
     # 01:30 UTC = 07:00 Sri Lanka time (UTC+5:30). Adjust if you like.
     - cron: "30 1 * * *"
-  workflow_dispatch:        # lets you also run it by hand for testing
+  workflow_dispatch:      # lets you also run it by hand for testing
 
 permissions:
-  contents: write           # needed to commit the draft back to the repo
+  contents: write         # needed to commit the draft back to the repo
 
 jobs:
   draft:
@@ -19,10 +19,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install -r requirements.txt
+      - run: pip install -r prompts/requirements.txt
 
       - name: Generate draft
-        run: python generate_draft.py
+        run: python prompts/generate_draft.py
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DISCORD_DRAFT_WEBHOOK: ${{ secrets.DISCORD_DRAFT_WEBHOOK }}
