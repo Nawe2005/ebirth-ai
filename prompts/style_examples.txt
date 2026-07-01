@@ -1,0 +1,13 @@
+### PASTE 2–3 OF YOUR PAST #ai-updates ARTICLES BELOW ###
+# The generator reads this whole file and copies your tone, your Sinhala style,
+# how you keep English technical terms in English, your bullet format, your length.
+# The better these examples, the more the auto-drafts sound like YOU.
+# Delete these comment lines once you paste. Separate each article with a line of ---.
+
+--- EXAMPLE 1 ---
+
+(paste one of your real articles here)
+
+--- EXAMPLE 2 ---
+
+(paste another real article here)
