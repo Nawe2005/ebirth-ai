@@ -1,0 +1,27 @@
+name: Publish draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Draft date (YYYY-MM-DD). Leave blank to publish the latest."
+        required: false
+        default: ""
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Publish to #ai-updates
+        run: python publish.py
+        env:
+          DISCORD_PUBLIC_WEBHOOK: ${{ secrets.DISCORD_PUBLIC_WEBHOOK }}
+          DRAFT_DATE: ${{ github.event.inputs.date }}
