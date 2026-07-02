@@ -42,11 +42,11 @@ MAX_HEADLINES = 8
 GEMINI_MODEL = "gemini-2.5-flash"            # article writing (free tier is plenty)
 
 # Image options (all free):
-#   "auto"        = try Gemini first, fall back to Pollinations if it returns nothing
-#   "gemini"      = Gemini only (no fallback)
-#   "pollinations"= free AI image, no key, always available
+#   "pexels"      = free stock photo (reliable, instant, needs free PEXELS_API_KEY) [recommended]
+#   "pollinations"= free AI image, no key (can be slow/unavailable)
+#   "gemini"      = Gemini image (needs PAID billing on your key; free tier is 0)
 #   "none"        = skip auto image; you drop drafts/<date>.png yourself
-IMAGE_SOURCE = "auto"
+IMAGE_SOURCE = "pexels"
 GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"   # "Nano Banana". Replacement when it
                                                 # retires (Oct 2026): gemini-3.1-flash-image-preview
 
@@ -98,24 +98,32 @@ RULES:
 - Start with a bold title line.
 - Ground every claim in the headlines above. If unsure, leave it out.
 
-At the very end, on its own final line, output an image brief like this:
-IMAGE_PROMPT: <one vivid English sentence describing an editorial illustration
-for this story. Conceptual and clean. Do NOT put any words or text in the image.>
+At the very end, output these two lines, each on its own line:
+IMAGE_PROMPT: <one vivid English sentence describing a conceptual illustration
+for this story. Clean. Do NOT put any words or text in the image.>
+IMAGE_QUERY: <2 to 4 plain English keywords for a stock-photo search that fits
+this story, e.g. "artificial intelligence server" or "robot technology">
 """
     resp = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
     return resp.text.strip()
 
 
 def split_article(raw: str):
+    image_query = ""
+    if "IMAGE_QUERY:" in raw:
+        raw, image_query = raw.rsplit("IMAGE_QUERY:", 1)
+        image_query = image_query.strip().strip('"').splitlines()[0] if image_query.strip() else ""
     if "IMAGE_PROMPT:" in raw:
         body, image_prompt = raw.rsplit("IMAGE_PROMPT:", 1)
     else:
         body, image_prompt = raw, "A clean modern editorial illustration about AI technology, no text."
     body = body.strip()
     image_prompt = image_prompt.strip()
+    if not image_query:
+        image_query = "artificial intelligence technology"
     first_line = next((l for l in body.splitlines() if l.strip()), "AI Update")
     title = re.sub(r"[#*_`]", "", first_line).strip()[:250]
-    return title, body, image_prompt
+    return title, body, image_prompt, image_query
 
 
 def _gemini_image(image_prompt: str):
@@ -148,14 +156,45 @@ def _pollinations_image(image_prompt: str):
     return None
 
 
-def make_image(image_prompt: str):
-    """Get an image for the article. Tries Gemini, then a free fallback, then
-    gives up gracefully so the draft still goes out with text only."""
+def _pexels_image(query: str):
+    """Free stock photo from Pexels. Reliable and instant. Returns bytes or None."""
+    key = os.environ.get("PEXELS_API_KEY")
+    if not key:
+        print("No PEXELS_API_KEY set — add it as a repo secret.")
+        return None
+    r = requests.get(
+        "https://api.pexels.com/v1/search",
+        headers={"Authorization": key},
+        params={"query": query, "per_page": 1, "orientation": "landscape"},
+        timeout=30,
+    )
+    r.raise_for_status()
+    photos = r.json().get("photos", [])
+    if not photos:
+        return None
+    img = requests.get(photos[0]["src"]["large"], timeout=60)
+    img.raise_for_status()
+    return img.content
+
+
+def make_image(image_prompt: str, image_query: str):
+    """Get an image for the article, based on IMAGE_SOURCE. Always degrades
+    gracefully to None so the draft still goes out with text only."""
     if IMAGE_SOURCE == "none":
         return None
 
-    # 1) Gemini first (unless pollinations-only was chosen)
-    if IMAGE_SOURCE in ("auto", "gemini"):
+    if IMAGE_SOURCE == "pexels":
+        try:
+            data = _pexels_image(image_query)
+            if data:
+                print("Image: Pexels stock (free).")
+                return data
+            print("Pexels returned no image.")
+        except Exception as e:
+            print(f"Pexels failed ({e}); posting text only.")
+        return None
+
+    if IMAGE_SOURCE == "gemini":
         try:
             data = _gemini_image(image_prompt)
             if data:
@@ -163,19 +202,20 @@ def make_image(image_prompt: str):
                 return data
             print("Gemini returned no image.")
         except Exception as e:
-            print(f"Gemini image failed ({e}).")
-        if IMAGE_SOURCE == "gemini":
-            return None                          # gemini-only: no fallback
+            print(f"Gemini image failed ({e}); posting text only.")
+        return None
 
-    # 2) Free fallback (or the primary source if IMAGE_SOURCE == "pollinations")
-    try:
-        data = _pollinations_image(image_prompt)
-        if data:
-            print("Image: generated by Pollinations (free).")
-            return data
-        print("Pollinations returned no image.")
-    except Exception as e:
-        print(f"Fallback image failed ({e}); posting text only.")
+    if IMAGE_SOURCE == "pollinations":
+        try:
+            data = _pollinations_image(image_prompt)
+            if data:
+                print("Image: generated by Pollinations (free).")
+                return data
+            print("Pollinations returned no image.")
+        except Exception as e:
+            print(f"Pollinations failed ({e}); posting text only.")
+        return None
+
     return None
 
 
@@ -215,12 +255,13 @@ def main():
 
     print("Writing article with Gemini...")
     raw = write_article(headlines, load_style_examples())
-    title, body, image_prompt = split_article(raw)
+    title, body, image_prompt, image_query = split_article(raw)
     print(f"Title: {title}")
     print(f"Image prompt: {image_prompt}")
+    print(f"Image query: {image_query}")
 
-    print("Generating image with Gemini...")
-    image_bytes = make_image(image_prompt)
+    print(f"Getting image (source: {IMAGE_SOURCE})...")
+    image_bytes = make_image(image_prompt, image_query)
 
     os.makedirs("drafts", exist_ok=True)
     with open(f"drafts/{date_str}.md", "w", encoding="utf-8") as f:
